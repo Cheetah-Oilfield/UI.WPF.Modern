@@ -14,7 +14,7 @@
 		<SignAssembly>True</SignAssembly>
 		<AssemblyOriginatorKeyFile>..\..\assets\others\iNKORE.Pulic.snk</AssemblyOriginatorKeyFile>
 		<RootNamespace>iNKORE.UI.WPF.Modern</RootNamespace>
-        <!--<GenerateDocumentationFile>true</GenerateDocumentationFile>-->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<NoWarn>$(NoWarn);CS1591;1701;1702;CA1416;CS1573</NoWarn>
 	</PropertyGroup>
 

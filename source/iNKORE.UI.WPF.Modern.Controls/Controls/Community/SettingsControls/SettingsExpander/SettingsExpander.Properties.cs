@@ -88,8 +88,6 @@ namespace iNKORE.UI.WPF.Modern.Controls
          new PropertyMetadata(defaultValue: false, (d, e) => ((SettingsExpander)d).OnIsExpandedPropertyChanged((bool)e.OldValue, (bool)e.NewValue)));
 
         /// <summary>
-        /// 
-        /// <summary>
         /// Gets or sets the Header.
         /// </summary>
         public object Header
