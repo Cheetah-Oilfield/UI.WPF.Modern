@@ -20,14 +20,23 @@ internal static partial class DocsScanner
 
         return Directory.GetFiles(docsRoot, ArticleFileName, SearchOption.AllDirectories)
             .Select(path => ReadArticle(documentationRoot, docsRoot, path))
+            .Where(a => !IsPlaceholder(a))
             .OrderBy(a => a.Id, StringComparer.Ordinal)
             .ToList();
+    }
+
+    // Unwritten articles contain only "We're still working on this, coming soon!".
+    private static bool IsPlaceholder(DocArticle article)
+    {
+        var text = string.Concat(article.Sections.Select(s => s.Markdown));
+        return PlaceholderRegex().Replace(text, "").Trim().Length == 0;
     }
 
     private static DocArticle ReadArticle(string documentationRoot, string docsRoot, string path)
     {
         var id = ToId(Path.GetRelativePath(docsRoot, Path.GetDirectoryName(path)!));
         var (frontMatter, body) = SplitFrontMatter(File.ReadAllText(path).Replace("\r\n", "\n"));
+        body = MdxCommentRegex().Replace(body, "");
 
         var sections = new List<DocSection>();
         string? title = null;
@@ -44,8 +53,15 @@ internal static partial class DocsScanner
             current.Clear();
         }
 
-        foreach (var line in body.Split('\n'))
+        foreach (var rawLine in body.Split('\n'))
         {
+            // Docusaurus code-block markers, not code.
+            if (HighlightMarkerRegex().IsMatch(rawLine))
+                continue;
+
+            // Site-relative links become doc:<id> so they can be followed with get_doc.
+            var line = rawLine.Replace("%BASE_NAME%/", "doc:", StringComparison.Ordinal);
+
             if (line.TrimStart().StartsWith("```", StringComparison.Ordinal))
                 inFence = !inFence;
 
@@ -123,6 +139,15 @@ internal static partial class DocsScanner
 
     [GeneratedRegex(@"^\s*!\[[^\]]*\]\([^)]*\)\s*$")]
     private static partial Regex ImageLineRegex();
+
+    [GeneratedRegex(@"\{/\*.*?\*/\}", RegexOptions.Singleline)]
+    private static partial Regex MdxCommentRegex();
+
+    [GeneratedRegex(@"We're still working on this,?\s*coming soon!?", RegexOptions.IgnoreCase)]
+    private static partial Regex PlaceholderRegex();
+
+    [GeneratedRegex(@"^\s*(#|//|<!--)\s*highlight-(next-line|start|end)\s*(-->)?\s*$")]
+    private static partial Regex HighlightMarkerRegex();
 
     [GeneratedRegex(@"^(\d+\.\s*)?(#\s*)?")]
     private static partial Regex SegmentPrefixRegex();

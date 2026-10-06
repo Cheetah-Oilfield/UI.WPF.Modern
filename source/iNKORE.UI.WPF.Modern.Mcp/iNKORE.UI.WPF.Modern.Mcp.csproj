@@ -31,4 +31,52 @@
 		<PackageReference Include="ModelContextProtocol" Version="2.2.0" />
 	</ItemGroup>
 
+	<!--
+		Index generation: build the library and IndexGen, run IndexGen, embed index.json.
+
+		  McpIndexPath          Use a prebuilt index.json instead of generating one.
+		  DocsPath              iNKORE-NET/Documentation checkout (default: a sibling "Documentation" folder).
+		  RequireDocs           true to fail when DocsPath is missing (release builds).
+		  LibraryConfiguration  Configuration of the library build to read (default: Release).
+	-->
+	<PropertyGroup>
+		<LibraryConfiguration Condition="'$(LibraryConfiguration)' == ''">Release</LibraryConfiguration>
+		<LibraryTargetFramework>net6.0-windows10.0.18362.0</LibraryTargetFramework>
+		<DocsPath Condition="'$(DocsPath)' == ''">$(MSBuildThisFileDirectory)..\..\..\Documentation</DocsPath>
+		<RequireDocs Condition="'$(RequireDocs)' == ''">false</RequireDocs>
+		<_GeneratedIndexPath>$(MSBuildProjectDirectory)\obj\index\index.json</_GeneratedIndexPath>
+		<_ControlsProject>$(MSBuildThisFileDirectory)..\iNKORE.UI.WPF.Modern.Controls\iNKORE.UI.WPF.Modern.Controls.csproj</_ControlsProject>
+		<_IndexGenProject>$(MSBuildThisFileDirectory)..\..\tools\iNKORE.UI.WPF.Modern.Mcp.IndexGen\iNKORE.UI.WPF.Modern.Mcp.IndexGen.csproj</_IndexGenProject>
+	</PropertyGroup>
+
+	<Target Name="GenerateLibraryIndex" BeforeTargets="BeforeBuild" Condition="'$(McpIndexPath)' == '' and '$(DesignTimeBuild)' != 'true'">
+		<!-- Restore only when needed, so a solution build's own restore isn't raced. -->
+		<MSBuild Projects="$(_ControlsProject)" Targets="Restore" Properties="MSBuildRestoreSessionId=$([System.Guid]::NewGuid())"
+		         Condition="!Exists('$(MSBuildThisFileDirectory)..\iNKORE.UI.WPF.Modern.Controls\obj\project.assets.json')" />
+		<MSBuild Projects="$(_ControlsProject)" Targets="Build" Properties="Configuration=$(LibraryConfiguration);TargetFramework=$(LibraryTargetFramework)" />
+
+		<MSBuild Projects="$(_IndexGenProject)" Targets="Restore" Properties="MSBuildRestoreSessionId=$([System.Guid]::NewGuid())"
+		         Condition="!Exists('$(MSBuildThisFileDirectory)..\..\tools\iNKORE.UI.WPF.Modern.Mcp.IndexGen\obj\project.assets.json')" />
+		<MSBuild Projects="$(_IndexGenProject)" Targets="Build" Properties="Configuration=$(Configuration)">
+			<Output TaskParameter="TargetOutputs" PropertyName="_IndexGenAssembly" />
+		</MSBuild>
+
+		<PropertyGroup>
+			<_IndexGenDocsArgs Condition="Exists('$(DocsPath)')">--docs &quot;$(DocsPath)&quot;</_IndexGenDocsArgs>
+			<_IndexGenDocsArgs Condition="'$(RequireDocs)' == 'true'">--docs &quot;$(DocsPath)&quot; --require-docs</_IndexGenDocsArgs>
+		</PropertyGroup>
+		<Exec Command="dotnet &quot;$(_IndexGenAssembly)&quot; --repo &quot;$(MSBuildThisFileDirectory)..\..&quot; --configuration $(LibraryConfiguration) --framework $(LibraryTargetFramework) --out &quot;$(_GeneratedIndexPath)&quot; $(_IndexGenDocsArgs)" />
+
+		<PropertyGroup>
+			<McpIndexPath>$(_GeneratedIndexPath)</McpIndexPath>
+		</PropertyGroup>
+	</Target>
+
+	<Target Name="EmbedLibraryIndex" BeforeTargets="BeforeBuild" AfterTargets="GenerateLibraryIndex" Condition="'$(DesignTimeBuild)' != 'true'">
+		<Error Condition="!Exists('$(McpIndexPath)')" Text="Library index not found at '$(McpIndexPath)'." />
+		<ItemGroup>
+			<EmbeddedResource Include="$(McpIndexPath)" LogicalName="iNKORE.UI.WPF.Modern.Mcp.index.json" />
+		</ItemGroup>
+	</Target>
+
 </Project>
