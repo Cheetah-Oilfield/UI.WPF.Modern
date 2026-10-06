@@ -9,4 +9,13 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
+	<ItemGroup>
+		<Compile Include="..\..\source\iNKORE.UI.WPF.Modern.Mcp\Index\LibraryIndex.cs" Link="Index\LibraryIndex.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+		<PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.10" />
+	</ItemGroup>
+
 </Project>
