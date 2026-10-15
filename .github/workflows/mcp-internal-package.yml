@@ -1,0 +1,60 @@
+name: Internal MCP Package
+
+# Fork-only workflow (Cheetah-Oilfield): publishes the MCP server tool to this organization's
+# GitHub Packages NuGet feed as a prerelease, e.g. 0.10.2-cheetah.7. Lives on the
+# cheetah/mcp-internal branch only; it is not part of the upstream pull request.
+#
+# Install (after adding the feed with a read:packages token):
+#   dotnet tool install iNKORE.UI.WPF.Modern.Mcp --version 0.10.2-cheetah.<n>
+
+on:
+  push:
+    branches: [ cheetah/mcp-internal ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check out documentation
+      uses: actions/checkout@v4
+      with:
+        repository: iNKORE-NET/Documentation
+        ref: main
+        path: _docs
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Compute package version
+      id: version
+      shell: pwsh
+      run: |
+        $info = Get-Content source/iNKORE.UI.WPF.Modern/Properties/AssemblyInfoCommon.cs -Raw
+        $library = [regex]::Match($info, 'AssemblyVersion\("(\d+\.\d+\.\d+)').Groups[1].Value
+        $version = "$library-cheetah.${{ github.run_number }}"
+        "version=$version" >> $env:GITHUB_OUTPUT
+        Write-Host "Package version: $version"
+
+    # Building the Mcp project builds the library, runs IndexGen and embeds the index.
+    - name: Pack MCP server
+      run: dotnet pack source/iNKORE.UI.WPF.Modern.Mcp/iNKORE.UI.WPF.Modern.Mcp.csproj -c Release -o artifacts/mcp -p:PackageVersion=${{ steps.version.outputs.version }} -p:RepositoryUrl=https://github.com/${{ github.repository }} -p:DocsPath="${{ github.workspace }}/_docs" -p:RequireDocs=true
+
+    - name: Upload package
+      uses: actions/upload-artifact@v4
+      with:
+        name: iNKORE.UI.WPF.Modern.Mcp-${{ steps.version.outputs.version }}
+        path: artifacts/mcp/*.nupkg
+        if-no-files-found: error
+
+    - name: Push to GitHub Packages
+      run: dotnet nuget push artifacts/mcp/*.nupkg --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
