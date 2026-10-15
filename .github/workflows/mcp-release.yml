@@ -1,0 +1,91 @@
+name: Release MCP Server
+
+# Builds the iNKORE.UI.WPF.Modern.Mcp dotnet tool for a library release and uploads the .nupkg.
+# The tool's version always equals the library version, and its index is generated from the tagged
+# source plus the latest iNKORE-NET/Documentation main.
+#
+# Publishing to NuGet runs in the "nuget" environment. Configure that environment with required
+# reviewers and a NUGET_API_KEY secret; without the secret the publish job skips the push.
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit to build, e.g. v0.10.2'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.ref }}
+
+    - name: Check out documentation
+      uses: actions/checkout@v4
+      with:
+        repository: iNKORE-NET/Documentation
+        ref: main
+        path: _docs
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Check tag matches library version
+      shell: pwsh
+      env:
+        REF_NAME: ${{ inputs.ref || github.ref_name }}
+      run: |
+        $info = Get-Content source/iNKORE.UI.WPF.Modern/Properties/AssemblyInfoCommon.cs -Raw
+        $version = [regex]::Match($info, 'AssemblyVersion\("(\d+\.\d+\.\d+)').Groups[1].Value
+        if ($env:REF_NAME -match '^v\d' -and $env:REF_NAME.Substring(1) -ne $version) {
+          throw "Tag $env:REF_NAME does not match library version $version in AssemblyInfoCommon.cs"
+        }
+        Write-Host "Library version: $version"
+
+    # Building the Mcp project builds the library, runs IndexGen and embeds the index.
+    - name: Pack MCP server
+      run: dotnet pack source/iNKORE.UI.WPF.Modern.Mcp/iNKORE.UI.WPF.Modern.Mcp.csproj -c Release -o artifacts/mcp -p:DocsPath="${{ github.workspace }}/_docs" -p:RequireDocs=true
+
+    - name: Upload package
+      uses: actions/upload-artifact@v4
+      with:
+        name: iNKORE.UI.WPF.Modern.Mcp
+        path: artifacts/mcp/*.nupkg
+        if-no-files-found: error
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    environment: nuget
+
+    steps:
+    - name: Download package
+      uses: actions/download-artifact@v4
+      with:
+        name: iNKORE.UI.WPF.Modern.Mcp
+        path: nupkg
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Push to NuGet
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: |
+        if [ -z "$NUGET_API_KEY" ]; then
+          echo "::warning::NUGET_API_KEY is not set in the 'nuget' environment; skipping the push. The package is still available as a workflow artifact."
+          exit 0
+        fi
+        dotnet nuget push nupkg/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
