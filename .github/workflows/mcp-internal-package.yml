@@ -56,5 +56,11 @@ jobs:
         path: artifacts/mcp/*.nupkg
         if-no-files-found: error
 
+    # On Windows, dotnet nuget push doesn't expand a relative wildcard path, so resolve the files here.
     - name: Push to GitHub Packages
-      run: dotnet nuget push artifacts/mcp/*.nupkg --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+      shell: pwsh
+      run: |
+        foreach ($package in Get-ChildItem artifacts/mcp/*.nupkg) {
+          dotnet nuget push $package.FullName --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json --api-key ${{ secrets.GITHUB_TOKEN }} --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
