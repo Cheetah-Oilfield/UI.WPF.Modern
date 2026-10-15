@@ -7,6 +7,9 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<RootNamespace>iNKORE.UI.WPF.Modern.Mcp</RootNamespace>
 
+		<!-- Run on .NET 8 or any newer runtime, so machines with only .NET 9+ installed work. -->
+		<RollForward>Major</RollForward>
+
 		<PackAsTool>true</PackAsTool>
 		<ToolCommandName>inkore-wpf-mcp</ToolCommandName>
 		<PackageId>iNKORE.UI.WPF.Modern.Mcp</PackageId>
